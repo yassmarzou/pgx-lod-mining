@@ -1,0 +1,6 @@
+dataSources/
+report/
+/preprocessing/inputs/
+/preprocessing/outputs/
+/processing/target/
+*~

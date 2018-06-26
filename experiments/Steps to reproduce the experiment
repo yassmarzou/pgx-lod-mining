@@ -1,0 +1,87 @@
+Steps to reproduce the experiment:
+
+Requirements:
+
+1. The processing requires a large memory capacity, therefore the expeiments were run on an EC2 Ubuntu virtual machine of type r3.4xlarge (122GB Ram).
+2. The RDF data (directed_subgraph.tar.lrz)
+3. The processing binaries (processing-1.0-SNAPSHOT.jar)
+
+
+After launching an EC2 instance, perform the follwoing to run the experiments:
+
+1. Copy the RDF data (directed_subgraph.tar.lrz) and the processing binaries (processing-1.0-SNAPSHOT.jar) to the instance:
+<code>
+scp -i mykey.pem directed_subgraph.tar.lrz ubuntu@ec2-52-35-94-56.us-west-2.compute.amazonaws.com:~
+scp -i mykey.pem processing-1.0-SNAPSHOT.jar ubuntu@ec2-52-35-94-56.us-west-2.compute.amazonaws.com:~
+</code>
+assuming mykey.pem is your ssh key pair for connecting to EC2, and ec2-52-35-94-56.us-west-2.compute.amazonaws.com is your instance public dns name.
+
+
+2. Connect to the instance:
+<code>
+ssh -i mykey.pem ubuntu@ec2-52-35-94-56.us-west-2.compute.amazonaws.com
+</code>
+
+3. Install java 1.8:
+<code>
+wget --no-check-certificate --no-cookies --header "Cookie: oraclelicense=accept-securebackup-cookie" http://download.oracle.com/otn-pub/java/jdk/8u92-b14/jdk-8u92-linux-x64.tar.gz
+tar -xvzf jdk-8u92-linux-x64.tar.gz
+sudo mkdir /usr/lib/jvm/
+sudo mv jdk1.8.0_92 /usr/lib/jvm/jdk1.8.0_92
+sudo update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk1.8.0_92/jre/bin/java 2000
+sudo update-alternatives --install /usr/bin/java java /usr/lib/jvm/jdk1.8.0_92/bin/javac 2000
+sudo cat >> oraclejdk.sh << EOF
+export J2SDKDIR=/usr/lib/jvm/jdk1.8.0_92
+export J2REDIR=/usr/lib/jvm/jdk1.8.0_92/jre
+export PATH=$PATH:/usr/lib/jvm/jdk1.8.0_92/bin:/usr/lib/jvm/jdk1.8.0_92/db/bin:/usr/lib/jvm/jdk1.8.0_92/jre/bin
+export JAVA_HOME=/usr/lib/jvm/jdk1.8.0_92
+export DERBY_HOME=/usr/lib/jvm/jdk1.8.0_92/db
+EOF
+sudo mv oraclejdk.sh /etc/profile.d/
+source /etc/profile.d/oraclejdk.sh
+echo 'export JAVA_HOME=/usr/lib/jvm/jdk1.8.0_92' >> .bashrc
+echo 'export PATH=$PATH:/usr/lib/jvm/jdk1.8.0_92/bin:/usr/lib/jvm/jdk1.8.0_92/db/bin:/usr/lib/jvm/jdk1.8.0_92/jre/bin' >> .bashrc
+source ~/.bashrc
+java -version
+javac -version
+</code>
+
+4. Install lrzip (to decompress data):
+<code>
+sudo apt-get install lrzip -y
+</code>
+
+5. Decompress the RDG graph:
+<code>
+lrzuntar directed_subgraph.tar.lrz
+</code>
+
+6. Run the experiments:
+To run the kernels comparison experiments:
+<code>
+java -Xmx100g -cp processing-1.0-SNAPSHOT.jar org.mines.processing.experiments.KernelComparison directed_subgraph &
+<code>
+To train a model and obtain classifications:
+<code>
+java -Xmx100g -cp processing-1.0-SNAPSHOT.jar org.mines.processing.experiments.Classification directed_subgraph &
+</code>
+To run the training sets comparison experiment (WARNING: this is a time-consuming task and can last hours):
+<code>
+java -Xmx100g -cp processing-1.0-SNAPSHOT.jar org.mines.processing.experiments.SubsetsComparison directed_subgraph &
+</code>
+
+This will create an output file having the name of the experiment (output-classification.txt or output-kernelcomparison.txt or output-subsetscomparison.txt). You can monitor the experiment progress using <code>tail -f FILENAME</code>
+
+7. (OPTIONAL) Monitor memory usage:
+You can monitor memory usage by running this command immediately after running one of the previous experiments:
+<code>
+while true; if [[ $(ps -p $!| wc -l) == 1 ]]; then break; fi do ps -p $! -o %mem >> mem.out; sleep 10; done &
+</code>
+
+This will create a mem.out file and update it with percent of memory used every 10 seconds. You can tail it using <code>tail -f mem.out</code>
+
+8. To download results back to your system (current folder), run this command in your local machine (you can change output-classification.txt to any remote filename):
+<code>
+scp -i mykey.pem ubuntu@ec2-52-35-94-56.us-west-2.compute.amazonaws.com:~/output-classification.txt .
+</code>
+assuming mykey.pem is your ssh key pair for connecting to EC2, and ec2-52-35-94-56.us-west-2.compute.amazonaws.com is your instance public dns name.
